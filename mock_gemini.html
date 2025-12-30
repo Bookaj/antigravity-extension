@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Gemini Mock Sidebar</title>
+    <style>
+        body { background: #333; color: white; display: flex; }
+        nav { width: 300px; background: #1e1e1e; padding: 20px; }
+        main { flex-grow: 1; padding: 20px; }
+        .row { display: block; padding: 10px; border-bottom: 1px solid #444; color: #ccc; text-decoration: none; }
+        
+        /* Simulating Gemini Structures */
+    </style>
+</head>
+<body>
+
+<nav>
+    <h3>Recent Chats</h3>
+    
+    <!-- CASE 1: Standard Link with href -->
+    <a href="/app/1234abcd" class="row">
+        Standard Link Chat
+    </a>
+
+    <!-- CASE 2: Button with jslog and nested title -->
+    <div role="button" jslog="...; c_5678efgh; track:click;" class="row">
+        <div>
+            <span class="conversation-title">JSLog Attribute Chat</span>
+        </div>
+    </div>
+
+    <!-- CASE 3: Tricky structure (Deep nesting, no specific class) -->
+    <div role="button" jslog="...; c_9012ijkl; ..." class="row">
+        <span>
+            <span>
+                Deeply Nested Text Chat
+            </span>
+        </span>
+    </div>
+
+    <!-- CASE 4: Hybrid (Link with ID in href) -->
+    <a href="https://gemini.google.com/app/3456mnop" class="row">
+        Absolute URL Chat
+    </a>
+
+</nav>
+
+<main>
+    <h1>Gemini Mock Page</h1>
+    <p>This page simulates the structure of the Gemini Sidebar.</p>
+    <p>The Antigravity Extension should inject a button here.</p>
+</main>
+
+</body>
+</html>
