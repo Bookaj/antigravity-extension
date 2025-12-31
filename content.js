@@ -240,10 +240,12 @@ const UI = {
             <div style="background:#222; color:#fff; padding:20px; border-radius:10px; width:500px; max-height:80vh; display:flex; flex-direction:column;">
                 <h3>Found ${chats.length} Chats</h3>
                 
-                <div style="margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px; display:flex; align-items:center; gap:10px;">
+                <div style="margin-bottom: 10px; display:flex; align-items:center; gap:10px;">
                     <label style="font-size: 13px; color: #aaa;">Parallel Tabs:</label>
                     <input type="number" id="ag-concurrency" value="3" min="1" max="10" style="background:#333; color:white; border:1px solid #555; border-radius:4px; padding:4px; width:50px;">
-                    <span style="font-size: 11px; color:#666;">(1-10 recommended)</span>
+                    
+                    <label style="font-size: 13px; color: #aaa; margin-left: 20px;">Use Proxy (SOCKS5):</label>
+                    <input type="checkbox" id="ag-use-proxy" checked style="cursor:pointer;">
                 </div>
 
                 <div style="display:flex; gap:10px; margin-bottom:10px;">
@@ -280,6 +282,7 @@ const UI = {
             const selectedIndices = Array.from(d.querySelectorAll('.ag-chat-checkbox:checked')).map(cb => parseInt(cb.dataset.index));
             const selectedChats = selectedIndices.map(i => chats[i]);
             const concurrency = parseInt(document.getElementById('ag-concurrency').value) || 3;
+            const useProxy = document.getElementById('ag-use-proxy').checked;
 
             d.remove();
             if (selectedChats.length > 0) {
@@ -287,7 +290,8 @@ const UI = {
                     action: "START_BATCH",
                     queue: selectedChats,
                     format: 'markdown',
-                    concurrency: concurrency
+                    concurrency: concurrency,
+                    useProxy: useProxy
                 });
             }
         };

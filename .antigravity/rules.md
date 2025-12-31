@@ -11,3 +11,7 @@
 - If a build fails or tests do not pass, you are authorized to analyze previous Git commits to identify what caused the error.
 - You may use `git diff` or temporarily `git checkout` earlier versions to compare code, but always return to the current task branch to apply the final fix.
 - Aim for autonomous self-correction before asking me for help.
+
+## Testing & Proxy Policy
+- **Proxy Requirement**: During live testing and `browser_subagent` tasks, always consider or implement proxy variables to avoid IP blocking (especially for ChatGPT/OpenAI). 
+- **Persistence**: This is a standing instruction. Always check for proxy configuration before initiating automated browser tests on restricted domains.
