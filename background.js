@@ -15,6 +15,7 @@ const State = {
     results: [],
     isProcessing: false,
     activeTabs: new Set(),
+    pendingTabs: 0,
     format: 'markdown',
     maxConcurrency: 3, // Default fallback
     timeouts: new Map() // tabId -> timeoutId
@@ -30,6 +31,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         State.results = [];
         State.isProcessing = true;
         State.activeTabs.clear();
+        State.pendingTabs = 0;
         State.timeouts.forEach(t => clearTimeout(t));
         State.timeouts.clear();
 
@@ -63,20 +65,30 @@ function fillPool() {
     if (!State.isProcessing) return;
 
     // Check if we are totally done
-    if (State.queue.length === 0 && State.activeTabs.size === 0) {
+    if (State.queue.length === 0 && State.activeTabs.size === 0 && State.pendingTabs === 0) {
         finishBatch();
         return;
     }
 
     // Launch survivors if pool has space and queue has items
-    while (State.activeTabs.size < State.maxConcurrency && State.queue.length > 0) {
+    // Sync check: count both active and about-to-be-active tabs
+    while ((State.activeTabs.size + State.pendingTabs) < State.maxConcurrency && State.queue.length > 0) {
         const item = State.queue.shift();
+        State.pendingTabs++; // Increment synchronously!
         launchTab(item);
     }
 }
 
 function launchTab(item) {
     chrome.tabs.create({ url: item.url, active: false }, (tab) => {
+        State.pendingTabs--; // Decrement once we have the ID
+
+        if (!State.isProcessing) {
+            // If processing was stopped while tab was opening
+            chrome.tabs.remove(tab.id);
+            return;
+        }
+
         const tabId = tab.id;
         State.activeTabs.add(tabId);
         console.log(`[Pool] Launched tab ${tabId} for ${item.url}`);
