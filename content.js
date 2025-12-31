@@ -293,11 +293,8 @@ const UI = {
                     <label style="font-size: 13px; color: #aaa;">Parallel Tabs:</label>
                     <input type="number" id="ag-concurrency" value="3" min="1" max="10" style="background:#333; color:white; border:1px solid #555; border-radius:4px; padding:4px; width:50px;">
                     
-                    <label style="font-size: 13px; color: #aaa; margin-left: 20px;">Use Proxy:</label>
-                    <input type="checkbox" id="ag-use-proxy" checked style="cursor:pointer;">
-
                     <label style="font-size: 13px; color: #aaa; margin-left: 20px;">Stealth Mode:</label>
-                    <input type="checkbox" id="ag-stealth" checked style="cursor:pointer;">
+                    <input type="checkbox" id="ag-stealth" style="cursor:pointer;">
                 </div>
 
                 <div style="display:flex; gap:10px; margin-bottom:10px;">
@@ -334,7 +331,6 @@ const UI = {
             const selectedIndices = Array.from(d.querySelectorAll('.ag-chat-checkbox:checked')).map(cb => parseInt(cb.dataset.index));
             const selectedChats = selectedIndices.map(i => chats[i]);
             const concurrency = parseInt(document.getElementById('ag-concurrency').value) || 3;
-            const useProxy = document.getElementById('ag-use-proxy').checked;
             const stealth = document.getElementById('ag-stealth').checked;
 
             d.remove();
@@ -344,7 +340,6 @@ const UI = {
                     queue: selectedChats,
                     format: 'markdown',
                     concurrency: concurrency,
-                    useProxy: useProxy,
                     stealth: stealth
                 });
             }

@@ -6,15 +6,7 @@ console.log("Antigravity v2 Background Loaded (Parallel Edition)");
 const CONFIG = {
     MAX_CONCURRENCY: 3,
     SCRAPE_BUFFER_MS: 3000,
-    TAB_TIMEOUT_MS: 120000,
-    PROXIES: [
-        { host: "170.130.40.150", port: 10526 },
-        { host: "202.62.42.92", port: 1080 },
-        { host: "203.189.152.49", port: 1080 },
-        { host: "5.75.235.252", port: 28259 },
-        { host: "5.75.235.252", port: 28656 },
-        { host: "5.75.235.212", port: 21225 }
-    ]
+    TAB_TIMEOUT_MS: 120000
 };
 
 // === STATE ===
@@ -27,19 +19,16 @@ const State = {
     format: 'markdown',
     maxConcurrency: 3,
     timeouts: new Map(),
-    currentProxyIndex: 0,
-    useProxy: false,
     stealth: false
 };
 
 // === MESSAGE HANDLER ===
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "START_BATCH") {
-        console.log(`Starting Batch: ${request.queue.length} items (Concurrency: ${request.concurrency}, Proxy: ${request.useProxy})`);
+        console.log(`Starting Batch: ${request.queue.length} items (Concurrency: ${request.concurrency})`);
         State.queue = [...request.queue];
         State.format = request.format;
         State.maxConcurrency = request.concurrency || 3;
-        State.useProxy = request.useProxy;
         State.stealth = request.stealth;
         State.results = [];
         State.isProcessing = true;
@@ -47,12 +36,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         State.pendingTabs = 0;
         State.timeouts.forEach(t => clearTimeout(t));
         State.timeouts.clear();
-
-        if (State.useProxy) {
-            applyProxy();
-        } else {
-            clearProxy();
-        }
 
         fillPool();
         sendResponse({ status: "started" });
@@ -66,47 +49,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
 });
 
-function applyProxy() {
-    const proxy = CONFIG.PROXIES[State.currentProxyIndex];
-    const config = {
-        mode: "fixed_servers",
-        rules: {
-            singleProxy: {
-                scheme: "socks5",
-                host: proxy.host,
-                port: proxy.port
-            }
-        }
-    };
-    chrome.proxy.settings.set({ value: config, scope: 'regular' }, () => {
-        console.log(`[Proxy] Applied: ${proxy.host}:${proxy.port}`);
-    });
-}
 
-function clearProxy() {
-    chrome.proxy.settings.clear({ scope: 'regular' }, () => {
-        console.log("[Proxy] Cleared.");
+State.isProcessing = false;
+State.queue = [];
+State.activeTabs.forEach(tabId => {
+    chrome.tabs.remove(tabId, () => {
+        if (chrome.runtime.lastError) { /* ignore */ }
     });
-}
-
-function rotateProxy() {
-    if (!State.useProxy) return;
-    State.currentProxyIndex = (State.currentProxyIndex + 1) % CONFIG.PROXIES.length;
-    applyProxy();
-}
-
-function stopProcessing() {
-    State.isProcessing = false;
-    State.queue = [];
-    clearProxy();
-    State.activeTabs.forEach(tabId => {
-        chrome.tabs.remove(tabId, () => {
-            if (chrome.runtime.lastError) { /* ignore */ }
-        });
-    });
-    State.activeTabs.clear();
-    State.timeouts.forEach(t => clearTimeout(t));
-    State.timeouts.clear();
+});
+State.activeTabs.clear();
+State.timeouts.forEach(t => clearTimeout(t));
+State.timeouts.clear();
 }
 
 // === PROCESSING POOL ===
@@ -208,12 +161,10 @@ function cleanupTab(tabId) {
         chrome.tabs.get(tabId, () => {
             if (!chrome.runtime.lastError) {
                 chrome.tabs.remove(tabId, () => {
-                    rotateProxy();
                     const coolDown = State.stealth ? 1000 + Math.random() * 2000 : 0;
                     setTimeout(fillPool, coolDown);
                 });
             } else {
-                rotateProxy();
                 fillPool();
             }
         });
@@ -223,7 +174,6 @@ function cleanupTab(tabId) {
 // === FINISHING ===
 async function finishBatch() {
     State.isProcessing = false;
-    clearProxy();
     console.log(`Batch Complete. Bundling ${State.results.length} files.`);
 
     if (State.results.length === 0) {

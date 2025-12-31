@@ -8,8 +8,7 @@
         "scripting",
         "storage",
         "downloads",
-        "tabs",
-        "proxy"
+        "tabs"
     ],
     "host_permissions": [
         "https://chatgpt.com/*",
