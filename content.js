@@ -210,7 +210,8 @@ const Scraper = {
                         stableCount = 0;
                     } else {
                         stableCount++;
-                        if (stableCount > (stealth ? 5 : 10)) break;
+                        // Wait for ~2.5s of stability (60 * 40ms) to ensure slow networks catch up
+                        if (stableCount > (stealth ? 10 : 60)) break;
                     }
                 }
             }
