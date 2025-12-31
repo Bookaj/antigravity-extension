@@ -1,115 +1,147 @@
 import { SimpleZip } from './zip_utils.js';
 
-console.log("Antigravity v2 Background Loaded");
+console.log("Antigravity v2 Background Loaded (Parallel Edition)");
+
+// === CONFIGURATION ===
+const CONFIG = {
+    MAX_CONCURRENCY: 3, // Opening 3 tabs at once is a sweet spot for speed vs stability
+    SCRAPE_BUFFER_MS: 3000,
+    TAB_TIMEOUT_MS: 120000
+};
 
 // === STATE ===
 const State = {
     queue: [],
     results: [],
     isProcessing: false,
-    tabId: null,
+    activeTabs: new Set(),
     format: 'markdown',
-    timeoutTimer: null
+    timeouts: new Map() // tabId -> timeoutId
 };
 
 // === MESSAGE HANDLER ===
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-
-    // 1. START BATCH
     if (request.action === "START_BATCH") {
         console.log(`Starting Batch: ${request.queue.length} items (${request.format})`);
-        State.queue = request.queue;
+        State.queue = [...request.queue];
         State.format = request.format;
         State.results = [];
         State.isProcessing = true;
+        State.activeTabs.clear();
+        State.timeouts.forEach(t => clearTimeout(t));
+        State.timeouts.clear();
 
-        processNextItem();
+        fillPool();
         sendResponse({ status: "started" });
     }
 
-    // 2. STOP BATCH
     if (request.action === "STOP_BATCH") {
-        State.isProcessing = false;
-        State.queue = [];
-        if (State.tabId) chrome.tabs.remove(State.tabId);
+        stopProcessing();
         sendResponse({ status: "stopped" });
     }
 
     return true;
 });
 
-// === PROCESSING LOOP ===
-function processNextItem() {
-    // Clear any previous timeout
-    if (State.timeoutTimer) clearTimeout(State.timeoutTimer);
+function stopProcessing() {
+    State.isProcessing = false;
+    State.queue = [];
+    State.activeTabs.forEach(tabId => {
+        chrome.tabs.remove(tabId, () => {
+            if (chrome.runtime.lastError) { /* ignore */ }
+        });
+    });
+    State.activeTabs.clear();
+    State.timeouts.forEach(t => clearTimeout(t));
+    State.timeouts.clear();
+}
 
-    if (!State.isProcessing || State.queue.length === 0) {
+// === PROCESSING POOL ===
+function fillPool() {
+    if (!State.isProcessing) return;
+
+    // Check if we are totally done
+    if (State.queue.length === 0 && State.activeTabs.size === 0) {
         finishBatch();
         return;
     }
 
-    const item = State.queue.shift();
-    console.log(`Processing: ${item.url}`);
+    // Launch survivors if pool has space and queue has items
+    while (State.activeTabs.size < CONFIG.MAX_CONCURRENCY && State.queue.length > 0) {
+        const item = State.queue.shift();
+        launchTab(item);
+    }
+}
 
-    // Create Background Tab (Inactive)
+function launchTab(item) {
     chrome.tabs.create({ url: item.url, active: false }, (tab) => {
-        State.tabId = tab.id;
+        const tabId = tab.id;
+        State.activeTabs.add(tabId);
+        console.log(`[Pool] Launched tab ${tabId} for ${item.url}`);
 
-        // SAFETY TIMEOUT: If tab hangs (e.g. infinite load), kill it after 120s
-        State.timeoutTimer = setTimeout(() => {
-            console.warn(`Timeout on ${item.url}. Skipping.`);
-            closeAndNext(State.tabId);
-        }, 120000);
+        // Set Safety Timeout
+        const tId = setTimeout(() => {
+            console.warn(`[Pool] Timeout on tab ${tabId} (${item.url}). Skipping.`);
+            cleanupTab(tabId);
+        }, CONFIG.TAB_TIMEOUT_MS);
+        State.timeouts.set(tabId, tId);
 
-        // Wait for load, then scrape
-        chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-            if (tabId === State.tabId && info.status === 'complete') {
+        // Listen for completion
+        const listener = (id, info) => {
+            if (id === tabId && info.status === 'complete') {
                 chrome.tabs.onUpdated.removeListener(listener);
 
-                // Inject Scrape Command
-                // Give it a tiny buffer for content script to register listener
+                // Buffer to allow content scripts to settle
                 setTimeout(() => {
-                    chrome.tabs.sendMessage(tabId, {
-                        action: "EXECUTE_SCROLL_AND_SCRAPE",
-                        format: State.format
-                    }, (response) => {
-
-                        // Handle Response
-                        if (chrome.runtime.lastError) {
-                            console.error("Msg Error:", chrome.runtime.lastError);
-                            // It might be that content script didn't load in time.
-                        } else if (response && response.data) {
-                            // Valid Data
-                            if (!response.data.error) {
-                                State.results.push(response.data);
-                            } else {
-                                console.error("Scrape Error:", response.data.error);
-                            }
-                        }
-
-                        closeAndNext(tabId);
-                    });
-                }, 2500); // 2.5s buffer after load complete
+                    requestScrape(tabId, item);
+                }, CONFIG.SCRAPE_BUFFER_MS);
             }
-        });
+        };
+        chrome.tabs.onUpdated.addListener(listener);
     });
 }
 
-function closeAndNext(tabId) {
-    if (State.timeoutTimer) clearTimeout(State.timeoutTimer);
+function requestScrape(tabId, item) {
+    if (!State.activeTabs.has(tabId)) return;
 
-    // Check if tab still exists before removing
-    chrome.tabs.get(tabId, () => {
-        if (!chrome.runtime.lastError) {
-            chrome.tabs.remove(tabId, () => {
-                State.tabId = null;
-                processNextItem(); // Recursive step
-            });
-        } else {
-            State.tabId = null;
-            processNextItem();
+    chrome.tabs.sendMessage(tabId, {
+        action: "EXECUTE_SCROLL_AND_SCRAPE",
+        format: State.format
+    }, (response) => {
+        if (chrome.runtime.lastError) {
+            console.error(`[Pool] Msg Error on ${tabId}:`, chrome.runtime.lastError.message);
+        } else if (response && response.data) {
+            if (!response.data.error) {
+                State.results.push(response.data);
+                console.log(`[Pool] Successfully scraped ${response.data.title}`);
+            } else {
+                console.error(`[Pool] Scrape Error on ${tabId}:`, response.data.error);
+            }
         }
+        cleanupTab(tabId);
     });
+}
+
+function cleanupTab(tabId) {
+    // Clear timeout
+    if (State.timeouts.has(tabId)) {
+        clearTimeout(State.timeouts.get(tabId));
+        State.timeouts.delete(tabId);
+    }
+
+    // Remove tab
+    if (State.activeTabs.has(tabId)) {
+        State.activeTabs.delete(tabId);
+        chrome.tabs.get(tabId, () => {
+            if (!chrome.runtime.lastError) {
+                chrome.tabs.remove(tabId, () => {
+                    fillPool(); // Try to fill the vacancy
+                });
+            } else {
+                fillPool();
+            }
+        });
+    }
 }
 
 // === FINISHING ===
@@ -122,15 +154,10 @@ async function finishBatch() {
         return;
     }
 
-    // Generate ZIP
     const zip = new SimpleZip();
-
     State.results.forEach(res => {
-        // Sanitize Filename
-        // Allow unicode but remove dangerous chars
         let safeTitle = res.title.replace(/[<>:"/\\|?*]/g, '_').trim().substring(0, 100);
         if (!safeTitle) safeTitle = `Untitled_${Date.now()}`;
-
         const ext = State.format === 'html' ? 'html' : 'md';
         zip.addFile(`${safeTitle}.${ext}`, res.content);
     });
@@ -139,13 +166,12 @@ async function finishBatch() {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const filename = `Antigravity_Export_${timestamp}.zip`;
 
-    // Download
     const reader = new FileReader();
     reader.onload = function () {
         chrome.downloads.download({
             url: reader.result,
             filename: `Antigravity_Brain/${filename}`,
-            saveAs: false // Silent download
+            saveAs: false
         });
     };
     reader.readAsDataURL(blob);
