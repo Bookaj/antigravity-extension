@@ -16,15 +16,17 @@ const State = {
     isProcessing: false,
     activeTabs: new Set(),
     format: 'markdown',
+    maxConcurrency: 3, // Default fallback
     timeouts: new Map() // tabId -> timeoutId
 };
 
 // === MESSAGE HANDLER ===
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "START_BATCH") {
-        console.log(`Starting Batch: ${request.queue.length} items (${request.format})`);
+        console.log(`Starting Batch: ${request.queue.length} items (${request.format}, Concurrency: ${request.concurrency})`);
         State.queue = [...request.queue];
         State.format = request.format;
+        State.maxConcurrency = request.concurrency || 3;
         State.results = [];
         State.isProcessing = true;
         State.activeTabs.clear();
@@ -67,7 +69,7 @@ function fillPool() {
     }
 
     // Launch survivors if pool has space and queue has items
-    while (State.activeTabs.size < CONFIG.MAX_CONCURRENCY && State.queue.length > 0) {
+    while (State.activeTabs.size < State.maxConcurrency && State.queue.length > 0) {
         const item = State.queue.shift();
         launchTab(item);
     }
