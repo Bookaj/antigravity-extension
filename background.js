@@ -50,16 +50,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 
-State.isProcessing = false;
-State.queue = [];
-State.activeTabs.forEach(tabId => {
-    chrome.tabs.remove(tabId, () => {
-        if (chrome.runtime.lastError) { /* ignore */ }
+function stopProcessing() {
+    State.isProcessing = false;
+    State.queue = [];
+    State.activeTabs.forEach(tabId => {
+        chrome.tabs.remove(tabId, () => {
+            if (chrome.runtime.lastError) { /* ignore */ }
+        });
     });
-});
-State.activeTabs.clear();
-State.timeouts.forEach(t => clearTimeout(t));
-State.timeouts.clear();
+    State.activeTabs.clear();
+    State.timeouts.forEach(t => clearTimeout(t));
+    State.timeouts.clear();
 }
 
 // === PROCESSING POOL ===
