@@ -162,6 +162,18 @@ const Scraper = {
             await Utils.wait(1000 + Math.random() * 2000);
         }
 
+        // 0.5. SAFETY WAIT (CAPTCHA / LOADING)
+        // If no content is found initially, wait for user to solve CAPTCHA or page to load.
+        let attempts = 0;
+        while (attempts < 60) { // Wait up to 60 seconds
+            const hasContent = document.querySelector(AG_CONFIG.selectors.gemini.messages);
+            if (hasContent) break;
+
+            Utils.log("No content detected. Waiting for load or CAPTCHA solve...");
+            await Utils.wait(1000);
+            attempts++;
+        }
+
         // 1. IDENTIFY SCROLLABLE AREA
         let scrollable = null;
         const scrollers = document.querySelectorAll(AG_CONFIG.selectors.gemini.scrollContainer);
