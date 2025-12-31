@@ -1,4 +1,3 @@
-```
 // ANTIGRAVITY v2 - CONTENT SCRIPT (KISS EDITION)
 // Philosophy: "Simple is better." - Scroll, Wait, Scrape.
 
@@ -11,11 +10,11 @@ const AG_CONFIG = {
             // Broad selectors for maximum compatibility
             messages: '.markdown, .query-text, .user-query, .model-response, [data-test-id="model-response"]',
             // The container that actually scrolls
-            scrollContainer: 'infinite-scroller' 
+            scrollContainer: 'infinite-scroller'
         }
     },
     timeouts: {
-        hydration: 20000, 
+        hydration: 20000,
         scroll: 40 // Turbo tick
     }
 };
@@ -23,7 +22,7 @@ const AG_CONFIG = {
 // === UTILITIES ===
 const Utils = {
     wait: (ms) => new Promise(r => setTimeout(r, ms)),
-    
+
     waitForContent: async (selector, timeout = 5000) => {
         const start = Date.now();
         while (Date.now() - start < timeout) {
@@ -34,8 +33,8 @@ const Utils = {
         return null;
     },
 
-    log: (msg, type='info') => {
-        console.log(`[AG - v2][${ type.toUpperCase() }] ${ msg } `);
+    log: (msg, type = 'info') => {
+        console.log(`[AG - v2][${type.toUpperCase()}] ${msg} `);
     }
 };
 
@@ -50,56 +49,56 @@ const Crawler = {
         Utils.log("Scanning sidebar...");
         const candidates = [];
         const seen = new Set();
-        
+
         // 1. Locate Sidebar
         const nav = document.querySelector('nav') || document.querySelector('[role="navigation"]');
         const container = nav || document.body;
 
         // 2. Scan for specific Gemini identifiers
         const conversationRows = container.querySelectorAll('div[data-test-id="conversation"], [role="button"][jslog*="c_"]');
-        
+
         conversationRows.forEach(row => {
             const jslog = row.getAttribute('jslog');
             const match = jslog ? jslog.match(/(c_[a-z0-9]{10,})/) : null;
-            
+
             if (match && match[1]) {
                 const id = match[1];
                 const url = `https://gemini.google.com/app/${id}`;
 
-if (!seen.has(url)) {
-    let title = "";
-    const titleEl = row.querySelector('.conversation-title');
-    if (titleEl) title = titleEl.innerText.trim();
-    if (!title) title = row.innerText.split('\n')[0].trim();
-    if (!title || title.length < 2) title = `Chat ${id.slice(-4)}`;
+                if (!seen.has(url)) {
+                    let title = "";
+                    const titleEl = row.querySelector('.conversation-title');
+                    if (titleEl) title = titleEl.innerText.trim();
+                    if (!title) title = row.innerText.split('\n')[0].trim();
+                    if (!title || title.length < 2) title = `Chat ${id.slice(-4)}`;
 
-    seen.add(url);
-    candidates.push({ title, url, id });
-}
+                    seen.add(url);
+                    candidates.push({ title, url, id });
+                }
             }
         });
 
-// 3. Fallback: Scan Links
-const links = container.querySelectorAll('a[href*="/app/"]');
-links.forEach(a => {
-    const href = a.getAttribute('href');
-    if (href.match(/\/app\/[a-z0-9]+/)) {
-        // Ignore if it's just a link to the current page (hash)
-        const urlObj = new URL(href, window.location.origin);
-        const id = urlObj.pathname.split('/app/')[1];
+        // 3. Fallback: Scan Links
+        const links = container.querySelectorAll('a[href*="/app/"]');
+        links.forEach(a => {
+            const href = a.getAttribute('href');
+            if (href.match(/\/app\/[a-z0-9]+/)) {
+                // Ignore if it's just a link to the current page (hash)
+                const urlObj = new URL(href, window.location.origin);
+                const id = urlObj.pathname.split('/app/')[1];
 
-        if (id && id.length > 5 && !seen.has(urlObj.href)) {
-            seen.add(urlObj.href);
-            let title = a.innerText.trim();
-            if (!title) title = `Chat ${id.slice(-4)}`;
-            candidates.push({ title, url: urlObj.href, id });
-        }
-    }
-});
+                if (id && id.length > 5 && !seen.has(urlObj.href)) {
+                    seen.add(urlObj.href);
+                    let title = a.innerText.trim();
+                    if (!title) title = `Chat ${id.slice(-4)}`;
+                    candidates.push({ title, url: urlObj.href, id });
+                }
+            }
+        });
 
-const valid = candidates.filter(c => !c.id.includes('click') && !c.id.includes('mode'));
-Utils.log(`Found ${valid.length} chats.`);
-return valid;
+        const valid = candidates.filter(c => !c.id.includes('click') && !c.id.includes('mode'));
+        Utils.log(`Found ${valid.length} chats.`);
+        return valid;
     }
 };
 
@@ -280,4 +279,3 @@ const UI = {
         };
     }
 };
-```
