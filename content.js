@@ -58,19 +58,22 @@ const Crawler = {
         if (container) {
             Utils.log(`Scrolling sidebar: ${container.tagName}`);
             let lastScrollHeight = container.scrollHeight;
-            let unchangedCount = 0;
 
             while (true) {
                 container.scrollTop = container.scrollHeight;
-                await Utils.wait(500); // Wait for load
 
-                if (container.scrollHeight > lastScrollHeight) {
-                    lastScrollHeight = container.scrollHeight;
-                    unchangedCount = 0;
-                } else {
-                    unchangedCount++;
-                    if (unchangedCount > 3) break; // Stop if no growth
+                // Smart Wait: Poll for expansion
+                let expanded = false;
+                for (let i = 0; i < 20; i++) { // Max 1000ms wait total
+                    await Utils.wait(50);
+                    if (container.scrollHeight > lastScrollHeight) {
+                        lastScrollHeight = container.scrollHeight;
+                        expanded = true;
+                        break; // Content loaded, scroll again immediately
+                    }
                 }
+
+                if (!expanded) break; // No growth in 1s, stop
             }
             await Utils.wait(1000); // Final settle
         }
