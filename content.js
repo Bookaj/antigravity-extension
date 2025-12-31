@@ -54,7 +54,28 @@ const Crawler = {
         const nav = document.querySelector('nav') || document.querySelector('[role="navigation"]');
         const container = nav || document.body;
 
-        // 2. Scan for specific Gemini identifiers
+        // 2. SCROLL SIDEBAR (Lazy Loading)
+        if (container) {
+            Utils.log(`Scrolling sidebar: ${container.tagName}`);
+            let lastScrollHeight = container.scrollHeight;
+            let unchangedCount = 0;
+
+            while (true) {
+                container.scrollTop = container.scrollHeight;
+                await Utils.wait(500); // Wait for load
+
+                if (container.scrollHeight > lastScrollHeight) {
+                    lastScrollHeight = container.scrollHeight;
+                    unchangedCount = 0;
+                } else {
+                    unchangedCount++;
+                    if (unchangedCount > 3) break; // Stop if no growth
+                }
+            }
+            await Utils.wait(1000); // Final settle
+        }
+
+        // 3. Scan for specific Gemini identifiers
         const conversationRows = container.querySelectorAll('div[data-test-id="conversation"], [role="button"][jslog*="c_"]');
 
         conversationRows.forEach(row => {
@@ -112,7 +133,7 @@ const Scraper = {
         } catch (e) { }
     },
 
-    extract: async (format = 'markdown', stealth = false) => {
+    extract: async (format = 'markdown', stealth = false, knownTitle = null) => {
         Scraper.forceHydration();
         const platform = Crawler.getPlatform();
 
@@ -182,7 +203,15 @@ const Scraper = {
         let realTitle = document.title;
         const headerEl = document.querySelector(AG_CONFIG.selectors.gemini.title);
         if (headerEl) realTitle = headerEl.innerText.trim();
-        if (!realTitle || realTitle === "Gemini") realTitle = `Gemini_Chat_${Date.now()}`;
+
+        // Quality Check Title
+        const isGeneric = !realTitle || realTitle === "Gemini" || realTitle === "New chat";
+        if (isGeneric && knownTitle) {
+            realTitle = knownTitle; // Fallback to sidebar title
+            Utils.log(`Used known title: ${realTitle}`);
+        } else if (isGeneric) {
+            realTitle = `Gemini_Chat_${Date.now()}`;
+        }
 
         let content = "";
 
@@ -219,7 +248,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
     if (request.action === "EXECUTE_SCROLL_AND_SCRAPE") {
-        Scraper.extract(request.format, request.stealth).then(data => sendResponse({ data }));
+        Scraper.extract(request.format, request.stealth, request.title).then(data => sendResponse({ data }));
         return true;
     }
 });

@@ -178,7 +178,8 @@ function requestScrape(tabId, item) {
     chrome.tabs.sendMessage(tabId, {
         action: "EXECUTE_SCROLL_AND_SCRAPE",
         format: State.format,
-        stealth: State.stealth
+        stealth: State.stealth,
+        title: item.title
     }, (response) => {
         if (chrome.runtime.lastError) {
             console.error(`[Pool] Msg Error on ${tabId}:`, chrome.runtime.lastError.message);

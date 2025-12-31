@@ -33,7 +33,7 @@ def extract_best_vpn(csv_file, min_speed=1000000): # 10 Mbps -> 10,000,000 bps. 
                 if not row.get('OpenVPN_ConfigData_Base64'): continue
                 
                 speed = int(row.get('Speed', 0))
-                if speed >= min_speed:
+                if speed >= min_speed and row.get('CountryShort') != 'JP':
                     candidates.append(row)
             except ValueError:
                 continue
