@@ -28,7 +28,8 @@ const State = {
     maxConcurrency: 3,
     timeouts: new Map(),
     currentProxyIndex: 0,
-    useProxy: false
+    useProxy: false,
+    stealth: false
 };
 
 // === MESSAGE HANDLER ===
@@ -39,6 +40,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         State.format = request.format;
         State.maxConcurrency = request.concurrency || 3;
         State.useProxy = request.useProxy;
+        State.stealth = request.stealth;
         State.results = [];
         State.isProcessing = true;
         State.activeTabs.clear();
@@ -121,8 +123,16 @@ function fillPool() {
     // Sync check: count both active and about-to-be-active tabs
     while ((State.activeTabs.size + State.pendingTabs) < State.maxConcurrency && State.queue.length > 0) {
         const item = State.queue.shift();
-        State.pendingTabs++; // Increment synchronously!
-        launchTab(item);
+        State.pendingTabs++;
+
+        // Stagger launches if stealth is on
+        const delay = (State.stealth && (State.activeTabs.size + State.pendingTabs) > 1)
+            ? Math.random() * 2000
+            : 0;
+
+        setTimeout(() => launchTab(item), delay);
+
+        if (State.stealth) break; // In stealth, only launch one per pool-fill tick
     }
 }
 
@@ -167,7 +177,8 @@ function requestScrape(tabId, item) {
 
     chrome.tabs.sendMessage(tabId, {
         action: "EXECUTE_SCROLL_AND_SCRAPE",
-        format: State.format
+        format: State.format,
+        stealth: State.stealth
     }, (response) => {
         if (chrome.runtime.lastError) {
             console.error(`[Pool] Msg Error on ${tabId}:`, chrome.runtime.lastError.message);
@@ -197,7 +208,8 @@ function cleanupTab(tabId) {
             if (!chrome.runtime.lastError) {
                 chrome.tabs.remove(tabId, () => {
                     rotateProxy();
-                    fillPool(); // Try to fill the vacancy
+                    const coolDown = State.stealth ? 1000 + Math.random() * 2000 : 0;
+                    setTimeout(fillPool, coolDown);
                 });
             } else {
                 rotateProxy();

@@ -112,9 +112,15 @@ const Scraper = {
         } catch (e) { }
     },
 
-    extract: async (format = 'markdown') => {
+    extract: async (format = 'markdown', stealth = false) => {
         Scraper.forceHydration();
         const platform = Crawler.getPlatform();
+
+        // 0. STEALTH BUFFER
+        if (stealth) {
+            Utils.log("Stealth Mode: Initial delay...");
+            await Utils.wait(1000 + Math.random() * 2000);
+        }
 
         // 1. IDENTIFY SCROLLABLE AREA
         let scrollable = null;
@@ -131,34 +137,45 @@ const Scraper = {
 
         Utils.log(`Targeting: ${scrollable.tagName}`);
 
-        // 2. TURBO SCROLL (Fast & Simple)
+        // 2. SCROLLING (Turbo or Stealth)
         if (scrollable) {
             scrollable.scrollTo(0, 0);
             await Utils.wait(200);
 
             let lastHeight = scrollable.scrollHeight;
             let stableCount = 0;
-            const step = window.innerHeight; // Big steps
             let current = 0;
 
+            const isEnd = () => current >= scrollable.scrollHeight;
+
             while (true) {
+                const step = stealth
+                    ? (window.innerHeight * 0.4) + (Math.random() * 200) // Small, jittery steps
+                    : window.innerHeight; // Big steps
+
                 current += step;
                 if (current > scrollable.scrollHeight) current = scrollable.scrollHeight;
-                scrollable.scrollTo(0, current);
-                await Utils.wait(AG_CONFIG.timeouts.scroll);
 
-                if (current >= scrollable.scrollHeight) {
+                scrollable.scrollTo({
+                    top: current,
+                    behavior: stealth ? 'smooth' : 'auto'
+                });
+
+                // Wait for tick
+                await Utils.wait(stealth ? 150 + Math.random() * 300 : AG_CONFIG.timeouts.scroll);
+
+                if (isEnd()) {
                     if (scrollable.scrollHeight > lastHeight) {
                         lastHeight = scrollable.scrollHeight;
                         stableCount = 0;
                     } else {
                         stableCount++;
-                        if (stableCount > 10) break; // ~400ms stable
+                        if (stableCount > (stealth ? 5 : 10)) break;
                     }
                 }
             }
             // Final settle
-            await Utils.wait(1000);
+            await Utils.wait(stealth ? 2000 : 1000);
         }
 
         // 3. EXTRACT
@@ -202,7 +219,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
     if (request.action === "EXECUTE_SCROLL_AND_SCRAPE") {
-        Scraper.extract(request.format).then(data => sendResponse({ data }));
+        Scraper.extract(request.format, request.stealth).then(data => sendResponse({ data }));
         return true;
     }
 });
@@ -244,8 +261,11 @@ const UI = {
                     <label style="font-size: 13px; color: #aaa;">Parallel Tabs:</label>
                     <input type="number" id="ag-concurrency" value="3" min="1" max="10" style="background:#333; color:white; border:1px solid #555; border-radius:4px; padding:4px; width:50px;">
                     
-                    <label style="font-size: 13px; color: #aaa; margin-left: 20px;">Use Proxy (SOCKS5):</label>
+                    <label style="font-size: 13px; color: #aaa; margin-left: 20px;">Use Proxy:</label>
                     <input type="checkbox" id="ag-use-proxy" checked style="cursor:pointer;">
+
+                    <label style="font-size: 13px; color: #aaa; margin-left: 20px;">Stealth Mode:</label>
+                    <input type="checkbox" id="ag-stealth" checked style="cursor:pointer;">
                 </div>
 
                 <div style="display:flex; gap:10px; margin-bottom:10px;">
@@ -283,6 +303,7 @@ const UI = {
             const selectedChats = selectedIndices.map(i => chats[i]);
             const concurrency = parseInt(document.getElementById('ag-concurrency').value) || 3;
             const useProxy = document.getElementById('ag-use-proxy').checked;
+            const stealth = document.getElementById('ag-stealth').checked;
 
             d.remove();
             if (selectedChats.length > 0) {
@@ -291,7 +312,8 @@ const UI = {
                     queue: selectedChats,
                     format: 'markdown',
                     concurrency: concurrency,
-                    useProxy: useProxy
+                    useProxy: useProxy,
+                    stealth: stealth
                 });
             }
         };
