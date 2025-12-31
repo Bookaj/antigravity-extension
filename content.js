@@ -50,6 +50,18 @@ const Crawler = {
         const candidates = [];
         const seen = new Set();
 
+        // 0. Ensure Sidebar is Open
+        const navCheck = document.querySelector('nav') || document.querySelector('[role="navigation"]');
+        if (!navCheck || navCheck.offsetParent === null) {
+            Utils.log("Sidebar seems closed. Attempting to open...");
+            // Try common buttons for menu/history
+            const menuBtn = document.querySelector('button[aria-label*="menu" i], button[aria-label*="history" i], button[aria-label*="expand" i]');
+            if (menuBtn) {
+                menuBtn.click();
+                await Utils.wait(1000); // Wait for animation
+            }
+        }
+
         // 1. Locate Scrollable Sidebar (Smart Detection)
         let container = document.querySelector('nav') || document.querySelector('[role="navigation"]');
 
