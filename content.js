@@ -50,9 +50,25 @@ const Crawler = {
         const candidates = [];
         const seen = new Set();
 
-        // 1. Locate Sidebar
-        const nav = document.querySelector('nav') || document.querySelector('[role="navigation"]');
-        const container = nav || document.body;
+        // 1. Locate Scrollable Sidebar (Smart Detection)
+        let container = document.querySelector('nav') || document.querySelector('[role="navigation"]');
+
+        // Try to find the *actual* scrollable parent of a conversation item
+        const sampleProbe = document.querySelector('div[data-test-id="conversation"], [role="button"][jslog*="c_"]');
+        if (sampleProbe) {
+            let curr = sampleProbe.parentElement;
+            while (curr && curr !== document.body) {
+                const style = window.getComputedStyle(curr);
+                const isScrollable = (style.overflowY === 'auto' || style.overflowY === 'scroll') && curr.scrollHeight > curr.clientHeight;
+                if (isScrollable) {
+                    container = curr;
+                    Utils.log(`Found real scroll container: ${container.tagName}.${container.className.replace(/ /g, '.')}`);
+                    break;
+                }
+                curr = curr.parentElement;
+            }
+        }
+        if (!container) container = document.body;
 
         // 2. SCROLL SIDEBAR (Lazy Loading)
         if (container) {
