@@ -5,7 +5,7 @@
 const AG_CONFIG = {
     selectors: {
         gemini: {
-            idRegex: /(c_[a-z0-9]{10,})/,
+            idRegex: /c_([a-z0-9]{10,})/,
             title: 'h1[data-test-id="conversation-title"], .conversation-title, h1',
             // Broad selectors for maximum compatibility
             messages: '.markdown, .query-text, .user-query, .model-response, [data-test-id="model-response"]',
@@ -59,7 +59,7 @@ const Crawler = {
 
         conversationRows.forEach(row => {
             const jslog = row.getAttribute('jslog');
-            const match = jslog ? jslog.match(/(c_[a-z0-9]{10,})/) : null;
+            const match = jslog ? jslog.match(AG_CONFIG.selectors.gemini.idRegex) : null;
 
             if (match && match[1]) {
                 const id = match[1];
